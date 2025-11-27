@@ -13,7 +13,7 @@ class Pertubation(object):
     def run(self, tree):
         """
         Thực hiện phép nhiễu (perturbation) để đa dạng hóa không gian tìm kiếm.
-        Phương pháp này loại bỏ một cây con ngẫu nhiên và phân phối lại các nút của nó
+        Phương pháp này loại bỏ một cây con có chi phí lớn nhất và phân phối lại các nút của nó
         vào các vị trí tốt nhất có thể.
         
         Args:
