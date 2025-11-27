@@ -50,7 +50,7 @@ class ATSP(object):
             # Lưu lại thứ tự ban đầu của các con
             original_order = list(node.children)
             
-            if num_children <= 6:
+            if num_children <= 7:
                 # Sử dụng duyệt hoán vị cho trường hợp số lượng con <= 7
                 import itertools
                 
