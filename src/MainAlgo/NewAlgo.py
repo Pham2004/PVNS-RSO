@@ -109,7 +109,7 @@ class NewAlgo(object):
         
         try:
             print("Khởi tạo các giải pháp ban đầu...")
-            self.forest = self.Init.initialize_population({'method1': 0.0, 'method2': 0.0, 'method3': 1.0})
+            self.forest = self.Init.initialize_population({'method1': 0.1, 'method2': 0.9})
 
             print(f"Đã khởi tạo {len(self.forest)} giải pháp ban đầu")
             
