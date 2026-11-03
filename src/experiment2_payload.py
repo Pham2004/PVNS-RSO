@@ -1,8 +1,7 @@
 """
 Thực nghiệm 2: Khảo sát ảnh hưởng của tải trọng xe đến mức tiêu thụ năng lượng
 =================================================================================
-Mục tiêu: Giữ nguyên tuyến đường và vận tốc, thay đổi tải trọng (mk - khối lượng 
-xe không tải) để quan sát mức tiêu thụ năng lượng.
+Mục tiêu: Tối ưu lại tuyến đường cho từng khối lượng xe không tải (mk).
 
 Tải trọng hiện tại trong code:
   - mk (khối lượng xe không tải / curb weight) = 3.2 (tấn)
@@ -15,8 +14,7 @@ Công thức năng lượng (từ Vehicle.py dòng 19):
 
 => mk ảnh hưởng trực tiếp đến T thông qua (mk + vehicle_load) * g * cr * v
 
-Multi-seed: Mỗi seed tạo ra tuyến đường tối ưu khác nhau → tính lại energy 
-với tất cả mk trên mỗi tuyến đường → trung bình ± std qua các seeds.
+Multi-seed: Mỗi tổ hợp testcase × mk × seed chạy thuật toán riêng.
 """
 
 import os
@@ -31,73 +29,31 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(project_root, 'src'))
 
 from Simulator.Graph import Graph
-from Simulator.Vehicle import Vehicle
-from Simulator.Solution import Solution
 from MainAlgo.NewAlgo import NewAlgo
 from Simulator.CostCalculationEvent import CostCalculator
 
 
 # ══════════════════════════════════════════════════════════════════════════
 DEFAULT_SEEDS = [42, 123, 456, 789, 2024]
+DEFAULT_PAYLOADS = [2.0, 2.5, 3.2, 4.0, 5.0, 6.5, 8.0]
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def run_experiment_with_seed(testcase, folder_path, mk_values, seed, v=50):
-    """
-    Chạy thuật toán 1 lần với seed cố định để lấy tuyến đường tối ưu,
-    sau đó tính lại năng lượng cho TẤT CẢ giá trị mk trên cùng tuyến đường.
-    """
-    # === Set seed ===
+def run_single(testcase, folder_path, mk, seed, v=50):
+    """Tối ưu một lần với mk và seed đã chọn."""
     random.seed(seed)
     np.random.seed(seed)
-    
     CostCalculator.remove_all_listeners()
-    
-    file_path = folder_path + f'/{testcase}.txt'
-    
-    # Chạy thuật toán với tham số gốc
-    print(f"    Seed={seed}: Đang tìm tuyến đường tối ưu...")
-    g_original = Graph(file_path, cd=0.7, xi=1, kappa=44, p=1.2, A=3.192, mk=3.2, g=9.81,
-                       cr=0.01, b1=2, b2=2.5, p1=1, p2=1000, psi=737, pi=0.2,
-                       R=165, eta=0.36, rho=0.85, Q=1000, v=v)
-    
-    lcs = NewAlgo(g_original, 10)
-    sol, cost, energy_cost_original, penalty_cost_original = lcs.run()
-    
-    # Lấy tuyến đường tối ưu
-    routes = []
-    if sol:
-        for vehicle in sol:
-            routes.append(list(vehicle.travel_path))
-    
-    print(f"    Seed={seed}: {len(routes)} xe, cost gốc = {cost:.2f}")
-    
-    # Tính năng lượng cho TẤT CẢ giá trị mk trên cùng tuyến đường
-    results = []
-    for mk in mk_values:
-        g_new = Graph(file_path, cd=0.7, xi=1, kappa=44, p=1.2, A=3.192, mk=mk, g=9.81,
-                      cr=0.01, b1=2, b2=2.5, p1=1, p2=1000, psi=737, pi=0.2,
-                      R=165, eta=0.36, rho=0.85, Q=1000, v=v)
-        
-        total_energy = 0
-        total_penalty = 0
-        
-        for route in routes:
-            total_energy += Vehicle.cal_total_engine_energy_consumption(g_new, route)
-            total_penalty += Vehicle.cal_total_penalty(g_new, route)
-        
-        results.append({
-            'testcase': testcase,
-            'seed': seed,
-            'mk': mk,
-            'total_energy': total_energy,
-            'total_penalty': total_penalty,
-            'total_cost': total_energy + total_penalty,
-            'energy_change_pct': ((total_energy - energy_cost_original) / energy_cost_original * 100) 
-                                  if energy_cost_original > 0 else 0
-        })
-    
-    return results, routes
+    file_path = os.path.join(folder_path, f'{testcase}.txt')
+    graph = Graph(file_path, cd=0.7, xi=1, kappa=44, p=1.2, A=3.192, mk=mk, g=9.81,
+                  cr=0.01, b1=2, b2=2.5, p1=1, p2=1000, psi=737, pi=0.2,
+                  R=165, eta=0.36, rho=0.85, Q=1000, v=v)
+    start = time.time()
+    solution, cost, energy, penalty = NewAlgo(graph, 10).run()
+    routes = [list(vehicle.travel_path) for vehicle in solution] if solution else []
+    return {'testcase': testcase, 'seed': seed, 'mk': mk,
+            'total_energy': energy, 'total_penalty': penalty,
+            'total_cost': cost, 'elapsed_time': time.time() - start}, routes
 
 
 def parse_seeds(seeds_str):
@@ -105,6 +61,13 @@ def parse_seeds(seeds_str):
     if not seeds_str or not seeds_str.strip():
         return DEFAULT_SEEDS
     return [int(s.strip()) for s in seeds_str.split(',') if s.strip()]
+
+
+def parse_payloads(value):
+    values = DEFAULT_PAYLOADS if not value.strip() else [float(x.strip()) for x in value.split(',') if x.strip()]
+    if not values or any(not np.isfinite(x) or x <= 0 for x in values):
+        raise ValueError('PAYLOADS phải là danh sách số dương, ví dụ: 2,3.2,5')
+    return list(dict.fromkeys(values))
 
 
 def main():
@@ -115,14 +78,14 @@ def main():
     
     os.makedirs(output_dir, exist_ok=True)
     
-    mk_values = [2.0, 2.5, 3.2, 4.0, 5.0, 6.5, 8.0]
+    mk_values = parse_payloads(os.environ.get('PAYLOADS', ''))
     
-    # Testcases
+    # Testcases: đọc từ env hoặc lấy toàn bộ file .txt trong folder
     testcases_env = os.environ.get('TESTCASES', '').strip()
     if testcases_env:
         testcases = [t.strip() for t in testcases_env.split(',') if t.strip()]
     else:
-        testcases = ["lc101", "lc201", "lr101", "lr201", "lrc101", "lrc201"]
+        testcases = sorted([f[:-4] for f in os.listdir(folder_path) if f.endswith('.txt')])
     
     # Seeds
     seeds = parse_seeds(os.environ.get('SEEDS', ''))
@@ -130,11 +93,13 @@ def main():
     print("=" * 70)
     print("THỰC NGHIỆM 2: KHẢO SÁT ẢNH HƯỞNG CỦA TẢI TRỌNG XE (mk)")
     print("=" * 70)
-    print(f"Tải trọng hiện tại: mk = 3.2 tấn")
     print(f"Các giá trị khảo sát: {mk_values}")
+    print(f"Mốc tính % thay đổi: mk={mk_values[0]:g} t")
     print(f"Vận tốc cố định: v = 50 km/h")
     print(f"Testcases: {testcases}")
     print(f"Seeds: {seeds} ({len(seeds)} seeds)")
+    total_runs = len(testcases) * len(seeds) * len(mk_values)
+    print(f"Tổng số lần chạy thuật toán: {total_runs}")
     print()
     
     # File kết quả chi tiết
@@ -142,7 +107,7 @@ def main():
     with open(summary_file, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Testcase', 'Seed', 'mk(ton)', 'Total_Energy', 'Total_Penalty',
-                         'Total_Cost', 'Energy_Change_Pct(%)'])
+                         'Total_Cost', 'Elapsed_Time(s)', 'Energy_Change_Pct(%)'])
     
     all_results = []
     
@@ -152,37 +117,31 @@ def main():
         print(f"{'='*50}")
         
         for seed in seeds:
-            try:
-                results, routes = run_experiment_with_seed(
-                    testcase, folder_path, mk_values, seed)
-                all_results.extend(results)
-                
-                # Ghi vào CSV
-                with open(summary_file, 'a', newline='') as f:
-                    writer = csv.writer(f)
-                    for r in results:
-                        writer.writerow([
-                            r['testcase'], r['seed'], r['mk'],
-                            f"{r['total_energy']:.4f}",
-                            f"{r['total_penalty']:.4f}", f"{r['total_cost']:.4f}",
-                            f"{r['energy_change_pct']:.2f}"
-                        ])
-                
-                # Lưu tuyến đường
-                route_file = os.path.join(output_dir, f'{testcase}_seed{seed}_routes.txt')
-                with open(route_file, 'w') as f:
-                    for i, route in enumerate(routes):
-                        f.write(f"Vehicle {i}: {' -> '.join(map(str, route))}\n")
-                        
-                # In tóm tắt cho seed này
-                for r in results:
-                    print(f"    mk={r['mk']:.1f}t -> energy={r['total_energy']:.2f}, "
-                          f"change={r['energy_change_pct']:+.2f}%")
-                
-            except Exception as e:
-                print(f"  LỖI (seed={seed}): {e}")
-                import traceback
-                traceback.print_exc()
+            baseline_energy = None  # Giá trị mk đầu tiên được chọn.
+            for mk in mk_values:
+                print(f"  {testcase} | seed={seed} | mk={mk:g} t")
+                try:
+                    result, routes = run_single(testcase, folder_path, mk, seed)
+                    if baseline_energy is None:
+                        baseline_energy = result['total_energy']
+                    result['energy_change_pct'] = (
+                        (result['total_energy'] - baseline_energy) / baseline_energy * 100
+                        if baseline_energy else 0)
+                    all_results.append(result)
+                    with open(summary_file, 'a', newline='') as f:
+                        csv.writer(f).writerow([
+                            testcase, seed, mk, f"{result['total_energy']:.4f}",
+                            f"{result['total_penalty']:.4f}", f"{result['total_cost']:.4f}",
+                            f"{result['elapsed_time']:.2f}", f"{result['energy_change_pct']:.2f}"])
+                    route_file = os.path.join(output_dir, f'{testcase}_mk{mk:g}_seed{seed}_routes.txt')
+                    with open(route_file, 'w') as f:
+                        for i, route in enumerate(routes):
+                            f.write(f"Vehicle {i}: {' -> '.join(map(str, route))}\n")
+                    print(f"    cost={result['total_cost']:.2f}, energy={result['total_energy']:.2f}")
+                except Exception as e:
+                    print(f"  LỖI (mk={mk:g}, seed={seed}): {e}")
+                    import traceback
+                    traceback.print_exc()
     
     # ─── Tổng hợp trung bình ± std qua các seeds ───
     print("\n\n" + "=" * 70)
@@ -222,8 +181,9 @@ def main():
     
     print(f"\nKết quả chi tiết: {summary_file}")
     print(f"Kết quả trung bình: {avg_file}")
-    print(f"Tổng số lần chạy thuật toán: {len(testcases)} testcases × {len(seeds)} seeds "
-          f"= {len(testcases) * len(seeds)} lần")
+    print(f"Tổng số lần chạy thành công: {len(all_results)}/{total_runs}")
+    if len(all_results) != total_runs:
+        raise RuntimeError(f"Thực nghiệm 2 thất bại {total_runs - len(all_results)} lần chạy")
     print("HOÀN THÀNH THỰC NGHIỆM 2!")
 
 
