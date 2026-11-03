@@ -1,0 +1,158 @@
+###############################################################################
+# GitHub Actions — PVNS-RSO Experiments (Multi-Seed)
+# ─────────────────────────────────────────────────────
+# Trigger thủ công từ tab "Actions" trên GitHub.
+# Chọn experiment, dataset, testcases, seeds khi bấm "Run workflow".
+#
+# Mặc định 5 seeds: 42, 123, 456, 789, 2024
+# Kết quả CSV được upload dưới dạng Artifact — tải về từ trang summary.
+###############################################################################
+
+name: Run Experiments
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: "Chọn thực nghiệm cần chạy"
+        required: true
+        type: choice
+        options:
+          - "all"
+          - "1 - Threshold (brute-force vs Regret-2)"
+          - "2 - Payload (tải trọng mk)"
+          - "3 - Velocity (vận tốc v)"
+      dataset:
+        description: "Bộ dữ liệu"
+        required: true
+        type: choice
+        default: "pdp_100"
+        options:
+          - "pdp_100"
+          - "pdp_200"
+          - "pdp_400"
+      testcases:
+        description: "Testcases (phân cách bằng dấu phẩy, để trống = 6 mặc định)"
+        required: false
+        type: string
+        default: ""
+      seeds:
+        description: "Seeds (phân cách bằng dấu phẩy, để trống = 42,123,456,789,2024)"
+        required: false
+        type: string
+        default: "42,123,456,789,2024"
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────
+  experiment-1:
+    name: "Exp1 — Threshold ${{ github.event.inputs.dataset }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    if: >-
+      github.event.inputs.experiment == 'all' ||
+      startsWith(github.event.inputs.experiment, '1')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Experiment 1 — Threshold
+        working-directory: src
+        env:
+          DATASET: ${{ github.event.inputs.dataset }}
+          TESTCASES: ${{ github.event.inputs.testcases }}
+          SEEDS: ${{ github.event.inputs.seeds }}
+        run: python experiment1_threshold.py
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment1-threshold-${{ github.event.inputs.dataset }}
+          path: results/experiment1_threshold/
+          retention-days: 90
+
+  # ────────────────────────────────────────────────────────────────────────
+  experiment-2:
+    name: "Exp2 — Payload ${{ github.event.inputs.dataset }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    if: >-
+      github.event.inputs.experiment == 'all' ||
+      startsWith(github.event.inputs.experiment, '2')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Experiment 2 — Payload
+        working-directory: src
+        env:
+          DATASET: ${{ github.event.inputs.dataset }}
+          TESTCASES: ${{ github.event.inputs.testcases }}
+          SEEDS: ${{ github.event.inputs.seeds }}
+        run: python experiment2_payload.py
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment2-payload-${{ github.event.inputs.dataset }}
+          path: results/experiment2_payload/
+          retention-days: 90
+
+  # ────────────────────────────────────────────────────────────────────────
+  experiment-3:
+    name: "Exp3 — Velocity ${{ github.event.inputs.dataset }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    if: >-
+      github.event.inputs.experiment == 'all' ||
+      startsWith(github.event.inputs.experiment, '3')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Experiment 3 — Velocity
+        working-directory: src
+        env:
+          DATASET: ${{ github.event.inputs.dataset }}
+          TESTCASES: ${{ github.event.inputs.testcases }}
+          SEEDS: ${{ github.event.inputs.seeds }}
+        run: python experiment3_velocity.py
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment3-velocity-${{ github.event.inputs.dataset }}
+          path: results/experiment3_velocity/
+          retention-days: 90
