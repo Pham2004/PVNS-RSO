@@ -1,0 +1,66 @@
+# Complete only the pdp_400, mk=4 testcase/seed pairs missing after runs 28-30.
+# One manual run produces one artifact with the same CSV layout as Exp2.
+name: Complete pdp_400 mk=4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  complete-payload4:
+    name: Run 69 missing testcase-seed pairs
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      DATASET: pdp_400
+      MK: "4"
+      VELOCITY: "50"
+      CASE_SEEDS: |
+        LRC1_4_2=456,789
+        LRC1_4_3=123,456,789
+        LRC1_4_4=42,123,456,789
+        LRC1_4_5=42,123,456,789
+        LRC1_4_6=42,123,456,789
+        LRC1_4_7=42,123,456,789
+        LRC1_4_8=42,123,456,789
+        LRC1_4_9=42,123,456,789
+        LRC2_4_1=42,123,456,789
+        LRC2_4_2=42,123,456,789
+        LRC2_4_3=42,123,456,789
+        LRC2_4_4=42,123,456,789
+        LRC2_4_5=42,123,456,789
+        LRC2_4_6=42,123,456,789
+        LRC2_4_7=42,123,456,789
+        LRC2_4_8=42,123,456,789
+        LRC2_4_9=42,123,456,789
+        LRC2_4_10=42,123,456,789
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify the 69 requested pairs
+        run: python src/complete_payload4.py --dry-run
+
+      - name: Run missing mk=4 results
+        run: python -u src/complete_payload4.py
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment2-payload-pdp_400
+          path: results/experiment2_payload/
+          if-no-files-found: error
+          retention-days: 90
